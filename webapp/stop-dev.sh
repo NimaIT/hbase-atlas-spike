@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -u
-pidfile=/workspace/hbase-spike/data/pids/webapp.pid
-if [ -f "$pidfile" ]; then kill "$(cat "$pidfile")" 2>/dev/null || true; rm -f "$pidfile"; fi
-echo "Webapp stopped."
+set -euo pipefail
+source "$(dirname -- "${BASH_SOURCE[0]}")/../env.sh"
+exec python3 "$HBASE_SPIKE_ROOT/scripts/runtime.py" web-stop "$@"
