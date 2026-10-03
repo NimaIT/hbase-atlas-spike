@@ -5,3 +5,6 @@ data/
 node_modules/
 .next/
 *.log
+playwright-report/
+test-results/
+*.tsbuildinfo
