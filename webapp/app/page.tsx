@@ -34,6 +34,7 @@ export default function Home() {
   const [exportState, setExportState] = useState<"idle" | "pending" | "success">("idle");
   const [exportError, setExportError] = useState("");
   const currentFilters = useRef<Filters>(emptyFilters);
+  const editingHistoryEntry = useRef(false);
   const searchRequest = useRef(0);
   const exportRequest = useRef(0);
   const searchController = useRef<AbortController | null>(null);
@@ -60,13 +61,18 @@ export default function Home() {
     setFilters(next);
   }
 
-  function changeFilters(next: Filters) {
+  function changeFilters(next: Filters, historyMode: "text" | "step" = "step") {
     const url = new URL(window.location.href);
     for (const key of filterKeys) {
       if (next[key]) url.searchParams.set(key, next[key]);
       else url.searchParams.delete(key);
     }
-    if (url.href !== window.location.href) window.history.pushState(null, "", url);
+    if (url.href !== window.location.href) {
+      // Rapid text edits share one history entry until their debounced search starts.
+      if (historyMode === "text" && editingHistoryEntry.current) window.history.replaceState(null, "", url);
+      else window.history.pushState(null, "", url);
+    }
+    editingHistoryEntry.current = historyMode === "text";
     applyFilters(next);
   }
 
@@ -76,6 +82,7 @@ export default function Home() {
     setFilters(initialFilters);
     setReady(true);
     function restoreFilters() {
+      editingHistoryEntry.current = false;
       applyFilters(readFilters());
     }
     window.addEventListener("popstate", restoreFilters);
@@ -98,6 +105,7 @@ export default function Home() {
     searchController.current = controller;
     setSearch({ status: "pending" });
     const timer = setTimeout(async () => {
+      editingHistoryEntry.current = false;
       try {
         const response = await fetch(`/api/search?${query}`, { signal: controller.signal });
         if (!response.ok) throw await responseError(response, "Search failed");
@@ -158,10 +166,10 @@ export default function Home() {
   return <main className="shell">
     <header><div><p className="eyebrow">LOCAL PROTOTYPE · HBASE + REST</p><h1>Atlas Metadata Search</h1><p className="subtitle">A lightweight catalog view over <code>atlas_meta</code>.</p></div><span className={`status ${search.status}`}><i aria-hidden="true" />{status}</span></header>
     <section className="panel filters" aria-label="Catalog filters">
-      <label className="search" htmlFor="metadata-query">Search metadata<span aria-hidden="true" className="search-icon">⌕</span><input id="metadata-query" value={filters.q} onChange={event => changeFilters({ ...filters, q: event.target.value })} placeholder="Search metadata…" /></label>
+      <label className="search" htmlFor="metadata-query">Search metadata<span aria-hidden="true" className="search-icon">⌕</span><input id="metadata-query" value={filters.q} onChange={event => changeFilters({ ...filters, q: event.target.value }, "text")} placeholder="Search metadata…" /></label>
       <label htmlFor="metadata-type">Type<select id="metadata-type" value={filters.type} onChange={event => changeFilters({ ...filters, type: event.target.value })}><option value="">All types</option>{typeOptions.map(type => <option key={type} value={type}>{type}</option>)}</select></label>
-      <label htmlFor="metadata-owner">Owner<input id="metadata-owner" value={filters.owner} onChange={event => changeFilters({ ...filters, owner: event.target.value })} placeholder="e.g. data-platform" /></label>
-      <label htmlFor="metadata-name">Name contains<input id="metadata-name" value={filters.name} onChange={event => changeFilters({ ...filters, name: event.target.value })} placeholder="e.g. sales" /></label>
+      <label htmlFor="metadata-owner">Owner<input id="metadata-owner" value={filters.owner} onChange={event => changeFilters({ ...filters, owner: event.target.value }, "text")} placeholder="e.g. data-platform" /></label>
+      <label htmlFor="metadata-name">Name contains<input id="metadata-name" value={filters.name} onChange={event => changeFilters({ ...filters, name: event.target.value }, "text")} placeholder="e.g. sales" /></label>
       <button className="secondary" onClick={() => changeFilters(emptyFilters)}>Reset filters</button>
     </section>
     <section className="summary" aria-label="Search results summary"><div role="status" aria-live="polite" aria-atomic="true">{completed ? <><strong>{rows.length}</strong><span>entities found</span></> : <span>{search.status === "error" ? "Search failed." : "Searching metadata…"}</span>}</div><button className="primary" disabled={!completed || exportState === "pending"} onClick={exportCsv}>{exportState === "pending" ? "Exporting CSV…" : "Export CSV"}</button></section>

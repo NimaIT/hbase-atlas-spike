@@ -252,3 +252,37 @@ for (const obsolete of ["success", "http-error"] as const) {
     await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
   });
 }
+
+test("rapid typing shares one history entry while settled searches, select and reset remain distinct", async ({ page }) => {
+  await mockSearch(page);
+  await page.goto("/?q=settled&campaign=keep#catalog");
+  await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  const queryInput = page.getByRole("textbox", { name: "Search metadata", exact: true });
+  await queryInput.fill("");
+  await queryInput.pressSequentially("updated", { delay: 20 });
+  await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  await expect(page).toHaveURL(/q=updated/);
+  await page.goBack();
+  await expect(queryInput).toHaveValue("settled");
+  await expect(page).toHaveURL(/campaign=keep#catalog$/);
+  await page.goForward();
+  await expect(queryInput).toHaveValue("updated");
+  await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  await queryInput.fill("");
+  await queryInput.pressSequentially("second", { delay: 20 });
+  await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  await page.goBack();
+  await expect(queryInput).toHaveValue("updated");
+  await page.goForward();
+  await expect(queryInput).toHaveValue("second");
+  await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("spark_job");
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await expect(queryInput).toHaveValue("");
+  await page.goBack();
+  await expect(queryInput).toHaveValue("second");
+  await expect(page.getByRole("combobox", { name: "Type", exact: true })).toHaveValue("spark_job");
+  await page.goBack();
+  await expect(page.getByRole("combobox", { name: "Type", exact: true })).toHaveValue("");
+  await expect(queryInput).toHaveValue("second");
+});
