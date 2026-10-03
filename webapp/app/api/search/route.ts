@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { searchEntities } from "../../../lib-hbase";
+import { searchCatalog } from "../../../lib-hbase";
+import { apiErrorResponse, parseFilters } from "../../../lib-api";
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const results = await searchEntities({ q: url.searchParams.get("q") || "", type: url.searchParams.get("type") || "", owner: url.searchParams.get("owner") || "", name: url.searchParams.get("name") || "" });
-    return NextResponse.json({ results, count: results.length });
+    const result = await searchCatalog(parseFilters(url.searchParams), { signal: request.signal });
+    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Search failed" }, { status: 502 });
+    return apiErrorResponse(error);
   }
 }
