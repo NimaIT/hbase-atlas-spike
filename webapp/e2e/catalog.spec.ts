@@ -26,14 +26,14 @@ async function deferredSearch(page: Page) {
   });
 }
 
-async function settleSearch(page: Page, q: string, result: "success" | "http-error" | "network-error") {
+async function settleSearch(page: Page, q: string, result: "success" | "http-error" | "network-error", flush = true) {
   await page.evaluate(({ q, result, payload }) => {
     const state = (window as unknown as { searchTest: { pending: Record<string, { resolve: (value: Response) => void; reject: (reason: Error) => void }> } }).searchTest;
     if (result === "network-error") state.pending[q].reject(new Error("Obsolete network error"));
     else state.pending[q].resolve(new Response(JSON.stringify(result === "http-error" ? { error: "Obsolete HTTP error" } : payload), { status: result === "http-error" ? 502 : 200 }));
   }, { q, result, payload: response(q) });
   // Flush promise continuations and React rendering before checking for stale updates.
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  if (flush) await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
 async function waitForSearch(page: Page, q: string) {
@@ -224,3 +224,31 @@ test("changing filters cancels an in-flight CSV and discards its late download",
   await expect(page.getByText("Preparing CSV download…")).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { exportTest: { urls: number } }).exportTest.urls)).toBe(0);
 });
+
+for (const obsolete of ["success", "http-error"] as const) {
+  test(`obsolete ${obsolete} during the new debounce cannot end loading or enable export`, async ({ page }) => {
+    await deferredSearch(page);
+    await page.clock.install();
+    await page.clock.pauseAt(new Date());
+    await page.goto("/");
+    await page.clock.runFor(200);
+    await expect(page.getByText("No matching metadata.")).toBeVisible();
+    await page.getByRole("textbox", { name: "Search metadata", exact: true }).fill("obsolete");
+    await page.clock.runFor(200);
+    await waitForSearch(page, "obsolete");
+    await page.getByRole("textbox", { name: "Search metadata", exact: true }).fill("newest");
+    await settleSearch(page, "obsolete", obsolete, false);
+    await page.clock.runFor(40);
+    expect(await page.evaluate(() => Boolean((window as unknown as { searchTest: { pending: Record<string, unknown> } }).searchTest.pending.newest))).toBe(false);
+    await expect(page.getByRole("table")).toHaveAttribute("aria-busy", "true");
+    await expect(page.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+    await expect(page.getByRole("cell", { name: "obsolete", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+    await page.clock.runFor(200);
+    await waitForSearch(page, "newest");
+    await settleSearch(page, "newest", "success", false);
+    await page.clock.runFor(40);
+    await expect(page.getByRole("cell", { name: "newest", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+  });
+}
