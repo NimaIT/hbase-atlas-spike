@@ -5,7 +5,7 @@ test("renders catalog data returned by the search API", async ({ page }) => {
     await route.fulfill({ json: { results: [{
       rowKey: "sales", type: "hive_table", name: "Sales Daily", owner: "Data-Platform",
       qualifiedName: "warehouse.sales_daily", createTime: "2026-01-01T00:00:00Z",
-    }] } });
+    }], count: 1, types: ["hive_table"] } });
   });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Atlas Metadata Search" })).toBeVisible();
