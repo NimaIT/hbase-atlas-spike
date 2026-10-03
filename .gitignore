@@ -1,0 +1,7 @@
+jdk-*/
+hbase/
+downloads/
+data/
+node_modules/
+.next/
+*.log
