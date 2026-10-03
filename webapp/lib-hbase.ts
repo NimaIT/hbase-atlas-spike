@@ -42,7 +42,8 @@ function decoded(value: unknown): string {
   if (typeof value !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) return invalidData();
   const bytes = Buffer.from(value, "base64");
   if (bytes.toString("base64") !== value) return invalidData();
-  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  // Each cell is a string, so a leading U+FEFF is data rather than a byte-order marker.
+  try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes); }
   catch { return invalidData(); }
 }
 
